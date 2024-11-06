@@ -1,19 +1,23 @@
 //! Process management syscalls
 use crate::{
     config::MAX_SYSCALL_NUM,
-    task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus},
+    task::{exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,get_current_task_info},
     timer::get_time_us,
 };
 /// time duration
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug,Default)]
 pub struct TimeVal {
     /// seconds
     pub sec: usize,
     /// microseconds
     pub usec: usize,
 }
-
+impl TimeVal {
+    fn new()->Self {
+        Self::default()
+    }
+}
 /// Task information
 #[allow(dead_code)]
 #[derive(Clone, Copy)]
@@ -36,8 +40,27 @@ impl TaskInfo {
         }
     }
     /// Increase syscall count by 1
-    pub fn increase_syscall_times(&mut self, syscall_id: usize) {
+    pub fn inc_syscall_times(&mut self, syscall_id: usize) {
         self.syscall_times[syscall_id] += 1;
+    }
+
+    /// calculating running time
+    pub fn set_spend_time(&mut self, duration: usize) {
+        //println!("spending time: {}", duration);
+        self.time += duration;
+    }
+
+    ///
+    pub fn set_task_status(&mut self, status: TaskStatus) {
+        self.status = status;
+    }
+    /// print task syscall times
+    pub fn print(&self) {
+        for (idx,times) in self.syscall_times.iter().enumerate() {
+            if times != &0 {
+                println!("syscall {} : {}", idx, times);
+            }
+        }
     }
 }
 
@@ -54,7 +77,14 @@ pub fn sys_yield() -> isize {
     suspend_current_and_run_next();
     0
 }
-
+/// get time in kernel
+pub fn get_time_kernel() -> isize {
+    let mut t = TimeVal::new();
+    match sys_get_time(&mut t, 0) {
+        0 => ((t.sec & 0xffff) * 1000 + t.usec / 1000) as isize,
+        _ => -1,
+    }
+}
 /// get time with second and microsecond
 pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
@@ -71,6 +101,10 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 /// YOUR JOB: Finish sys_task_info to pass testcases
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
-    
-    -1
+    let ti = get_current_task_info();
+    print!("kernel: sys_task_info:{:?},syscalltime:{:?}",ti.time,ti.syscall_times);
+    unsafe {
+    *_ti = ti;
+    }
+    0
 }

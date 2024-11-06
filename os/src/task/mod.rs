@@ -20,7 +20,7 @@ use crate::sync::UPSafeCell;
 use lazy_static::*;
 use switch::__switch;
 pub use task::{TaskControlBlock, TaskStatus};
-use crate::syscall::process::TaskInfo;
+use crate::syscall::process::{TaskInfo,get_time_kernel};
 pub use context::TaskContext;
 
 /// The task manager, where all the tasks are managed.
@@ -55,6 +55,7 @@ lazy_static! {
             task_cx: TaskContext::zero_init(),
             task_status: TaskStatus::UnInit,
             task_info: TaskInfo::new(),
+            task_start_time: 0,
         }; MAX_APP_NUM];
         for (i, task) in tasks.iter_mut().enumerate() {
             task.task_cx = TaskContext::goto_restore(init_app_cx(i));
@@ -103,6 +104,7 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_status = TaskStatus::Exited;
+
     }
 
     /// Find next task to run and return task id.
@@ -124,7 +126,7 @@ impl TaskManager {
             let current = inner.current_task;
             inner.tasks[next].task_status = TaskStatus::Running;
            
-            inner.current_task = next;
+           inner.current_task = next;
             let current_task_cx_ptr = &mut inner.tasks[current].task_cx as *mut TaskContext;
             let next_task_cx_ptr = &inner.tasks[next].task_cx as *const TaskContext;
             drop(inner);
@@ -142,10 +144,33 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         if inner.tasks[current].task_status == TaskStatus::Running {
-            inner.tasks[current].task_info.increase_syscall_times(syscall_id);
+            inner.tasks[current].task_info.inc_syscall_times(syscall_id);
+            inner.tasks[current].task_start_time=get_time_kernel() as usize;
         }
-        
         drop(inner);
+    }
+
+    fn get_current_task_info(&self) -> TaskInfo {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let current_task_status = inner.tasks[current].task_status;
+        //task info
+
+        if current_task_status == TaskStatus::Running {
+
+            inner.tasks[current].task_info.set_task_status(current_task_status);
+
+            let current_time = get_time_kernel() as usize;
+            let last_time = inner.tasks[current].task_start_time;
+            let duration =  current_time - last_time;
+            println!("tasks_id:{},duration:{},current:{},last_time:{}", current,duration,current_time,last_time );
+            inner.tasks[current].task_info.set_spend_time(duration);
+
+            inner.tasks[current].task_info.print();
+            inner.tasks[current].task_info
+        }else {
+            TaskInfo::new()
+        }
     }
 }
 
@@ -184,4 +209,9 @@ pub fn exit_current_and_run_next() {
 /// calulate current task syscall times
 pub fn inc_sys_call_times(syscall_id: usize) {
     TASK_MANAGER.inc_sys_call_times(syscall_id);
+}
+
+/// get current task info
+pub fn get_current_task_info() -> TaskInfo {
+    TASK_MANAGER.get_current_task_info()
 }
