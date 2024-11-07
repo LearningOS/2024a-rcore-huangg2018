@@ -41,13 +41,15 @@ impl TaskInfo {
     }
     /// Increase syscall count by 1
     pub fn inc_syscall_times(&mut self, syscall_id: usize) {
-        self.syscall_times[syscall_id] += 1;
+        if syscall_id < MAX_SYSCALL_NUM {
+            self.syscall_times[syscall_id] += 1;
+        }
     }
 
     /// calculating running time
     pub fn set_spend_time(&mut self, duration: usize) {
         //println!("spending time: {}", duration);
-        self.time += duration;
+        self.time = duration;
     }
 
     ///
@@ -55,13 +57,6 @@ impl TaskInfo {
         self.status = status;
     }
     /// print task syscall times
-    pub fn print(&self) {
-        for (idx,times) in self.syscall_times.iter().enumerate() {
-            if times != &0 {
-                println!("syscall {} : {}", idx, times);
-            }
-        }
-    }
 }
 
 /// task exits and submit an exit code
@@ -102,7 +97,7 @@ pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info");
     let ti = get_current_task_info();
-    print!("kernel: sys_task_info:{:?},syscalltime:{:?}",ti.time,ti.syscall_times);
+    trace!("kernel: sys_task_info:spend time:{:?}",ti.time);
     unsafe {
     *_ti = ti;
     }

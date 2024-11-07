@@ -145,7 +145,6 @@ impl TaskManager {
         let current = inner.current_task;
         if inner.tasks[current].task_status == TaskStatus::Running {
             inner.tasks[current].task_info.inc_syscall_times(syscall_id);
-            inner.tasks[current].task_start_time=get_time_kernel() as usize;
         }
         drop(inner);
     }
@@ -154,23 +153,15 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         let current_task_status = inner.tasks[current].task_status;
-        //task info
-
-        if current_task_status == TaskStatus::Running {
-
-            inner.tasks[current].task_info.set_task_status(current_task_status);
-
-            let current_time = get_time_kernel() as usize;
-            let last_time = inner.tasks[current].task_start_time;
-            let duration =  current_time - last_time;
-            println!("tasks_id:{},duration:{},current:{},last_time:{}", current,duration,current_time,last_time );
-            inner.tasks[current].task_info.set_spend_time(duration);
-
-            inner.tasks[current].task_info.print();
-            inner.tasks[current].task_info
-        }else {
-            TaskInfo::new()
-        }
+        // set task status with current status
+        inner.tasks[current].task_info.set_task_status(current_task_status);
+        //设置当前已消耗时间
+        let current_time = get_time_kernel() as usize;
+        let last_time = inner.tasks[current].task_start_time;
+        let duration =  current_time - last_time;
+        inner.tasks[current].task_info.set_spend_time(duration);
+        //返回当前正在运行的任务信息
+        inner.tasks[current].task_info
     }
 }
 
