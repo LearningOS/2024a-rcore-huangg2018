@@ -56,7 +56,6 @@ impl TaskInfo {
     pub fn set_task_status(&mut self, status: TaskStatus) {
         self.status = status;
     }
-    /// print task syscall times
 }
 
 /// task exits and submit an exit code
