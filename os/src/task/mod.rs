@@ -16,6 +16,7 @@ mod task;
 
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
+use crate::syscall::process::{get_kernel_time, TaskInfo};
 use crate::trap::TrapContext;
 use alloc::vec::Vec;
 use lazy_static::*;
@@ -152,6 +153,21 @@ impl TaskManager {
         } else {
             panic!("All applications completed!");
         }
+    }
+
+    fn update_syscall_times(&self,syscall_id:usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        inner.tasks[current].task_info.add_syscall_time(syscall_id);
+    }
+    fn get_current_task_info(&self) -> TaskInfo {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let task_start_time = inner.tasks[current].task_start_time;
+        let current_time = get_kernel_time() as usize - task_start_time;
+        inner.tasks[current].task_info.set_time(current_time);
+        //drop(inner);
+        inner.tasks[current].task_info
     }
 }
 

@@ -1,16 +1,45 @@
 //! Process management syscalls
+use core::mem::size_of;
+
 use crate::{
-    config::MAX_SYSCALL_NUM,
-    task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,
-    },
+    config::MAX_SYSCALL_NUM, mm::translated_byte_buffer, task::{
+        change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus
+    }, timer::get_time_us
 };
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug,Default)]
+/// time valuses the current
 pub struct TimeVal {
+    /// seconds
     pub sec: usize,
+    /// microseconds
     pub usec: usize,
+}
+
+impl TimeVal {
+    fn new() -> Self {
+        Self::default()
+    }
+}
+/// get kernel system time value
+pub fn get_kernel_system_time(ts: *mut TimeVal, _tz: usize) -> isize {
+    let us = get_time_us();
+    unsafe {
+        *ts = TimeVal {
+            sec: us / 1_000_000,
+            usec: us % 1_000_000,
+        };
+    }
+    0
+}
+/// get kernel time
+pub fn get_kernel_time() -> isize {
+    let mut time = TimeVal::new();
+    match get_kernel_system_time(&mut time, 0) {
+        0 => ((time.sec & 0xffff) * 1000 + time.usec / 1000) as isize,
+        _ => -1,
+    }
 }
 
 /// Task information
@@ -22,6 +51,30 @@ pub struct TaskInfo {
     syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
     time: usize,
+}
+impl TaskInfo {
+    /// initialize task information
+    pub fn new() -> Self {
+        Self {
+            status:TaskStatus::UnInit,
+            syscall_times: [0; MAX_SYSCALL_NUM],
+            time: 0,
+        }
+    }
+    /// set current task status
+    pub fn set_status(&mut self, status: TaskStatus) {
+        self.status = status;
+    }
+    /// record task call times
+    pub fn add_syscall_time(&mut self, syscall_num: usize) {
+        if syscall_num < MAX_SYSCALL_NUM {
+            self.syscall_times[syscall_num] += 1;
+        }
+    }
+    /// record task running time
+    pub fn set_time(&mut self, time: usize) {
+        self.time = time;
+    }
 }
 
 /// task exits and submit an exit code
@@ -43,7 +96,31 @@ pub fn sys_yield() -> isize {
 /// HINT: What if [`TimeVal`] is splitted by two pages ?
 pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
     trace!("kernel: sys_get_time");
-    -1
+    let buffers = translated_byte_buffer(
+        current_user_token(), _ts as *const u8, size_of::<TimeVal>());
+
+    let us = get_time_us();
+
+    let time_val = TimeVal {
+        sec: us / 1_000_000,
+        usec: us % 1_000_000,
+    };
+
+    let mut time_val_ptr = &time_val as *const _ as *const u8;
+    for buffer in buffers {
+        unsafe {
+            time_val_ptr.copy_to(buffer.as_mut_ptr(), buffer.len());
+            time_val_ptr = time_val_ptr.add(buffer.len());
+        }
+    }
+    // let us = get_time_us();
+    // unsafe {
+    //     *_ts = TimeVal {
+    //         sec: us / 1_000_000,
+    //         usec: us % 1_000_000,
+    //     };
+    // }
+    0
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
