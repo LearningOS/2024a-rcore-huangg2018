@@ -160,13 +160,18 @@ impl TaskManager {
         let current = inner.current_task;
         inner.tasks[current].task_info.add_syscall_time(syscall_id);
     }
+
     fn get_current_task_info(&self) -> TaskInfo {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
+        let current_status = inner.tasks[current].task_status;
+        inner.tasks[current].task_info.set_status(current_status);
         let task_start_time = inner.tasks[current].task_start_time;
         let current_time = get_kernel_time() as usize - task_start_time;
         inner.tasks[current].task_info.set_time(current_time);
         //drop(inner);
+        inner.tasks[current].task_info.print_syscall_times();
+
         inner.tasks[current].task_info
     }
 }
@@ -217,4 +222,13 @@ pub fn current_trap_cx() -> &'static mut TrapContext {
 /// Change the current 'Running' task's program break
 pub fn change_program_brk(size: i32) -> Option<usize> {
     TASK_MANAGER.change_current_program_brk(size)
+}
+
+/// update the current task shedule times
+pub fn update_syscall_times(syscall_id: usize) {
+    TASK_MANAGER.update_syscall_times(syscall_id);
+}
+/// update the current task info
+pub fn get_current_task_info() ->TaskInfo {
+    TASK_MANAGER.get_current_task_info()
 }

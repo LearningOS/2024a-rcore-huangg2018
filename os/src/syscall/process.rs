@@ -3,7 +3,7 @@ use core::mem::size_of;
 
 use crate::{
     config::MAX_SYSCALL_NUM, mm::translated_byte_buffer, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus
+        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_info, suspend_current_and_run_next, TaskStatus
     }, timer::get_time_us
 };
 
@@ -44,6 +44,7 @@ pub fn get_kernel_time() -> isize {
 
 /// Task information
 #[allow(dead_code)]
+#[derive(Clone, Copy,Debug)]
 pub struct TaskInfo {
     /// Task status in it's life cycle
     status: TaskStatus,
@@ -74,6 +75,14 @@ impl TaskInfo {
     /// record task running time
     pub fn set_time(&mut self, time: usize) {
         self.time = time;
+    }
+    /// print syscall times
+    pub fn print_syscall_times(&mut self) {
+        for (indx, times) in self.syscall_times.iter().enumerate() {
+            if *times!=0 {
+                println!("syscall {}: {}", indx, times);
+            }
+        }
     }
 }
 
@@ -128,15 +137,28 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 /// HINT: What if [`TaskInfo`] is splitted by two pages ?
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
-    -1
+    let ti = get_current_task_info();
+    println!("ti: {:?}", ti);
+    let buffers = translated_byte_buffer(
+        current_user_token(), _ti as *const u8, size_of::<TimeVal>());
+    let mut ti_ptr = &ti as *const _ as *const u8;
+    for buffer in buffers {
+        unsafe {
+            ti_ptr.copy_to(buffer.as_mut_ptr(), buffer.len());
+            ti_ptr = ti_ptr.add(buffer.len());
+        }
+    }    
+    0
 }
 
 // YOUR JOB: Implement mmap.
+/// sys mmap
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
     -1
 }
 
+/// sys munmap
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(_start: usize, _len: usize) -> isize {
     trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
