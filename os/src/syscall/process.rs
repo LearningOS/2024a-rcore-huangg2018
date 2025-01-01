@@ -3,7 +3,7 @@ use core::mem::size_of;
 
 use crate::{
     config::MAX_SYSCALL_NUM, mm::translated_byte_buffer, task::{
-        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_info, suspend_current_and_run_next, TaskStatus
+        change_program_brk, current_user_token, exit_current_and_run_next, get_current_task_info, suspend_current_and_run_next, sysmmap, TaskStatus
     }, timer::get_time_us
 };
 
@@ -138,9 +138,9 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
 pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     trace!("kernel: sys_task_info NOT IMPLEMENTED YET!");
     let ti = get_current_task_info();
-    println!("ti: {:?}", ti);
+    //println!("ti: {:?}", ti);
     let buffers = translated_byte_buffer(
-        current_user_token(), _ti as *const u8, size_of::<TimeVal>());
+        current_user_token(), _ti as *const u8, size_of::<TaskInfo>());
     let mut ti_ptr = &ti as *const _ as *const u8;
     for buffer in buffers {
         unsafe {
@@ -155,7 +155,11 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
 /// sys mmap
 pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
     trace!("kernel: sys_mmap NOT IMPLEMENTED YET!");
-    -1
+    if _port & !0x7 != 0 {
+        println!("sys_mmap: start: {}, len: {}, port: {:03b}", _start, _len, _port as u8);
+        sysmmap(_start, _len, _port+1);
+    }
+    0
 }
 
 /// sys munmap

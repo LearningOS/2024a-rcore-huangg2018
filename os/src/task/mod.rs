@@ -15,6 +15,7 @@ mod switch;
 mod task;
 
 use crate::loader::{get_app_data, get_num_app};
+use crate::mm::{MapPermission, VirtAddr};
 use crate::sync::UPSafeCell;
 use crate::syscall::process::{get_kernel_time, TaskInfo};
 use crate::trap::TrapContext;
@@ -174,6 +175,17 @@ impl TaskManager {
 
         inner.tasks[current].task_info
     }
+
+    fn mmap(&self, start: usize, len: usize, port: usize) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current = inner.current_task;
+        let start_va = VirtAddr::from(start);
+        let end_va = VirtAddr::from(start + len);
+        let permission=MapPermission::from_bits(port as u8).unwrap();
+        inner.tasks[current].memory_set.insert_framed_area(start_va, end_va, permission);
+        drop(inner);
+        0
+    }
 }
 
 /// Run the first task in task list.
@@ -231,4 +243,9 @@ pub fn update_syscall_times(syscall_id: usize) {
 /// update the current task info
 pub fn get_current_task_info() ->TaskInfo {
     TASK_MANAGER.get_current_task_info()
+}
+
+/// mmap the current task's memory
+pub fn sysmmap(start: usize, len: usize, port: usize) -> isize {
+    TASK_MANAGER.mmap(start, len, port)
 }
